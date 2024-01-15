@@ -8,4 +8,5 @@ markdown-it-py
 charset_normalizer
 logging_json
 requests>=2.13
+beautifulsoup4
 tenacity
