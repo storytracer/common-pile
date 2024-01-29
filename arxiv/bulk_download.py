@@ -49,6 +49,9 @@ parser.add_argument(
 parser.add_argument(
     "--download_manifest", action="store_true", help="Should we download the manifest."
 )
+parser.add_argument(
+    "--manifest_only", action="store_true", help="Should we ONLY download the manifest."
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -190,9 +193,15 @@ class BulkDownloader:
 
 
 def main(args):
-    if not os.path.exists(args.manifest) or args.download_manifest:
+    if (
+        not os.path.exists(args.manifest)
+        or args.download_manifest
+        or args.manifest_only
+    ):
         logging.info(f"Fetching manifest from {args.manifest_url}")
         get_manifest(args.manifest_url, args.manifest)
+        if args.manifest_only:
+            return 0
 
     bulk_downloader = BulkDownloader(
         manifest=args.manifest,
