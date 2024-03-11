@@ -62,5 +62,6 @@ setup(
         "logging_json",
         "requests>=2.13",
         "tenacity",
+        "lxml",
     ],
 )
