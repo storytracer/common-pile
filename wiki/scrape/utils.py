@@ -1,7 +1,9 @@
 """Utilities for scraping wikis."""
 
+import glob
+import os
 import urllib.parse
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,14 +29,48 @@ def get_wiki_name(url: str) -> str:
     return urllib.parse.urlparse(url).netloc
 
 
+# We don't use snake case as the string methods added in PIP616 are named like this.
 def removeprefix(s: str, prefix: str) -> str:
-    """Incase we aren't using python >= 3.9"""
+    """In case we aren't using python >= 3.9"""
     if s.startswith(prefix):
         return s[len(prefix) :]
     return s[:]
 
 
-def wiki_url(base_url: str, title: str) -> str:
+# We don't use snake case as the string methods added in PIP616 are named like this.
+def removesuffix(s: str, suffix: str) -> str:
+    """In case we aren't using python >= 3.9"""
+    # Check for suffix to avoid calling s[:-0] for an empty string.
+    if suffix and s.endswith(suffix):
+        return s[: -len(suffix)]
+    return s[:]
+
+
+def make_wiki_url(base_url: str, title: str, url_prefix: str = "wiki/") -> str:
     """Create a wiki url from the wiki url and the page name."""
-    url = urllib.parse.urljoin(base_url, f"wiki/{title.replace(' ', '_')}")
+    url_prefix = removesuffix(url_prefix, "/")
+    url = urllib.parse.urljoin(base_url, f"{url_prefix}/{title.replace(' ', '_')}")
     return urllib.parse.quote(url, safe=":/")
+
+
+def read_page_titles(filename: str) -> List[str]:
+    with open(filename) as f:
+        return f.read().strip("\n").split("\n")
+
+
+def enumerate_pages(pages: List[str], pattern: str = "*.txt") -> List[str]:
+    """Enumerate all pages found in a wiki scrape.
+
+    Args:
+      pages: A list of paths to text files containing one page title per line or
+        a dir containing multiple page files.
+      pattern: A glob pattern to find page files within pages[i] when it is a dir.
+    """
+    results = []
+    for page in pages:
+        if os.path.exists(page) and os.path.isdir(page):
+            for f in glob.iglob(os.path.join(page, pattern)):
+                results.extend(read_page_titles(f))
+        else:
+            results.extend(read_page_titles(page))
+    return results

@@ -12,12 +12,11 @@ points of concern are:
 
 
 import argparse
-import glob
 import os
 import urllib.parse
 from typing import List
 
-from utils import get_page, get_wiki_name
+from utils import enumerate_pages, get_page, get_wiki_name
 
 from licensed_pile import logs
 
@@ -61,28 +60,17 @@ def export_pages(wiki: str, pages: List[str]):
     )
 
 
-def read_page_titles(filename: str) -> List[str]:
-    with open(filename) as f:
-        return f.read().strip("\n").split("\n")
-
-
 def main(args):
     if args.listauthors is not None:
         raise NotImplementedError("--listauthors is current not implemented.")
-    logger = logs.get_logger("wikiscrape")
+    logger = logs.get_logger("wiki.scrape")
     args.pages = (
         args.pages
         if args.pages is not None
         else [os.path.join("data", get_wiki_name(args.wiki), "pages")]
     )
     logger.info("Enumerating pages from %s", args.pages)
-    pages = []
-    for page in args.pages:
-        if os.path.exists(page) and os.path.isdir(page):
-            for f in glob.glob(os.path.join(page, "*.txt")):
-                pages.extend(read_page_titles(f))
-        else:
-            pages.extend(read_page_titles(page))
+    pages = enumerate_pages(args.pages)
     logger.info("There are %d pages to export.", len(pages))
 
     args.output_dir = (
@@ -111,5 +99,5 @@ def main(args):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    logs.configure_logging("wikiscrape")
+    logs.configure_logging("wiki.scrape")
     main(args)

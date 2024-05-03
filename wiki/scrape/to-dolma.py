@@ -7,7 +7,7 @@ import glob
 import os
 import urllib.parse
 
-from utils import get_wiki_name, wiki_url
+from utils import get_wiki_name, make_wiki_url
 
 from licensed_pile.licenses import PermissiveLicenses
 from licensed_pile.logs import configure_logging, get_logger
@@ -91,7 +91,7 @@ def format_dolma(xml, source_name: str, wiki: str, license: PermissiveLicenses):
         "metadata": {
             "license": str(license),
             "authors": sorted(contributors),
-            "url": wiki_url(wiki, page_title),
+            "url": make_wiki_url(wiki, page_title),
             "wiki": get_wiki_name(wiki),
             "namespace": page_namespace,
             "title": page_title,
