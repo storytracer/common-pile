@@ -18,7 +18,7 @@ SOURCE_NAME = "wikiscrape"
 
 
 parser = argparse.ArgumentParser(description="Convert the xml export to dolma.")
-parser.add_argument("--wiki", required=True, help="The wiki url we are exporting.")
+parser.add_argument("--wiki", required=True, help="The wiki url we are processing.")
 parser.add_argument("--license", required=True, help="The licenses this is under.")
 parser.add_argument("--export", help="The location of the exported pages.")
 parser.add_argument(
@@ -32,6 +32,7 @@ parser.add_argument(
 parser.add_argument(
     "--shard_size", type=int, default=1, help="Size, in GB, for each shard."
 )
+parser.add_argument("--last_author", action="store_true", help="")
 
 
 def main(args):
@@ -50,18 +51,29 @@ def main(args):
     )
     logger.info("Loading export from %s", args.export)
 
+    logger.info("Saving Dolma formatted data to %s", args.output_dir)
     # Our parser can ignore namespaces so just use `page`.
     pages = iterate_xmls(glob.iglob(args.export), tag="page")
     pages = map(
         functools.partial(
-            format_dolma, source_name=SOURCE_NAME, wiki=args.wiki, license=license
+            format_dolma,
+            source_name=SOURCE_NAME,
+            wiki=args.wiki,
+            license=license,
+            all_authors=not args.last_author,
         ),
         pages,
     )
     to_dolma(pages, args.output_dir, args.filename, args.shard_size)
 
 
-def format_dolma(xml, source_name: str, wiki: str, license: PermissiveLicenses):
+def format_dolma(
+    xml,
+    source_name: str,
+    wiki: str,
+    license: PermissiveLicenses,
+    all_authors: bool = True,
+):
     revisions = [r for r in xml if r.tag.endswith("revision")]
     # TODO Handle if this fails and add logging.
     text = [t for t in revisions[-1] if t.tag.endswith("text")][0].text
@@ -73,14 +85,23 @@ def format_dolma(xml, source_name: str, wiki: str, license: PermissiveLicenses):
     page_title = [t for t in xml if t.tag.endswith("title")][0].text
 
     contributors = set()
-    for revision in revisions:
-        contribs = [c for c in revision if c.tag.endswith("contributor")]
+    if all_authors:
+        for revision in revisions:
+            contribs = [c for c in revision if c.tag.endswith("contributor")]
+            # When there are multiple contributors, there are multiple contributor
+            # xml items where each one has a single username and id items.
+            names = [u.text for c in contribs for u in c if u.tag.endswith("username")]
+            # Save their id too in case they change their username
+            uid = [u.text for c in contribs for u in c if u.tag.endswith("id")]
+            contributors.update(zip(names, uid))
+    else:
+        contrib = [c for c in revisions[-1] if c.tag.endswith("contributor")]
         # When there are multiple contributors, there are multiple contributor
         # xml items where each one has a single username and id items.
-        names = [u.text for c in contribs for u in c if u.tag.endswith("username")]
+        name = [u.text for c in contrib for u in c if u.tag.endswith("username")]
         # Save their id too in case they change their username
-        uid = [u.text for c in contribs for u in c if u.tag.endswith("id")]
-        contributors.update(zip(names, uid))
+        uid = [u.text for c in contrib for u in c if u.tag.endswith("id")]
+        contributors.update(zip(name, uid))
 
     return {
         "id": f"{page_namespace}-{page_id}",
