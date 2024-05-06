@@ -17,3 +17,8 @@ Either the integer or the name can be used as input. This generates lists of pag
 4. Convert the XML export into the dolma format with `python to-dolma.py --wiki ${wiki_url} --license ${license_str}`
 
 **TODO:** Is this exported format the exact same as the published mediawiki dumps to the point we can reuse code?
+
+The export format is the same as the wiki dump
+
+Wikisrchive scraps have ~3 versions, to use the same format as the dump and 1 has a unique format. Most of the wiki's
+that aren't online anymore use this old format.

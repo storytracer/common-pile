@@ -27,12 +27,27 @@ parser.add_argument(
     help="Where the dolma formatted data goes.",
 )
 parser.add_argument(
+    "--source",
+    choices=["wikiscrape", "wikiarchive", "wikidump"],
+    default="wikiscrape",
+    help="Where does the data come from?",
+)
+parser.add_argument(
     "--filename", default=None, help="The base filename for our chat data."
 )
 parser.add_argument(
     "--shard_size", type=int, default=1, help="Size, in GB, for each shard."
 )
-parser.add_argument("--last_author", action="store_true", help="")
+parser.add_argument(
+    "--last_author",
+    action="store_true",
+    help="Should we only include the most recent author? (Faster)",
+)
+parser.add_argument(
+    "--include_redirects",
+    action="store_true",
+    help="Should we skip pages that are redirects to others?",
+)
 
 
 def main(args):
@@ -57,13 +72,16 @@ def main(args):
     pages = map(
         functools.partial(
             format_dolma,
-            source_name=SOURCE_NAME,
+            source_name=args.source,
             wiki=args.wiki,
             license=license,
             all_authors=not args.last_author,
+            skip_redirect=not args.include_redirects,
         ),
         pages,
     )
+    # When we filter out pages based on things like redirects, they may be None
+    pages = filter(lambda p: p is not None, pages)
     to_dolma(pages, args.output_dir, args.filename, args.shard_size)
 
 
@@ -73,7 +91,10 @@ def format_dolma(
     wiki: str,
     license: PermissiveLicenses,
     all_authors: bool = True,
+    skip_redirect: bool = True,
 ):
+    if skip_redirect and [x for x in xml if x.tag.endswith("redirect")]:
+        return None
     revisions = [r for r in xml if r.tag.endswith("revision")]
     # TODO Handle if this fails and add logging.
     text = [t for t in revisions[-1] if t.tag.endswith("text")][0].text
