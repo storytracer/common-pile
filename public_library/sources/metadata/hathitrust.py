@@ -11,9 +11,8 @@ from tqdm import tqdm
 
 import licensed_pile
 
-METADATA_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "metadata" / "hathitrust"
-)
+SOURCE_PATH = Path(__file__).resolve().parent.parent.parent
+METADATA_PATH = SOURCE_PATH / "data" / "metadata" / "hathitrust"
 
 
 def get_filelist():
@@ -119,10 +118,6 @@ def convert_to_parquet():
     header_df = pd.read_csv(header_file_path, sep="\t")
 
     # Read the latest dataset file into a DuckDB table
-    latest_dataset_file_path = METADATA_PATH / latest_full_dataset["filename"]
-    parquet_file_path = METADATA_PATH / latest_dataset_file_path.name.replace(
-        ".txt.gz", ".parquet"
-    )
 
     # Check if the parquet file already exists on disk
     if parquet_file_path.exists():
@@ -139,7 +134,39 @@ def convert_to_parquet():
     con.close()
 
 
+def export_ia_us_pd_books():
+    # Connect to the DuckDB database
+    con = duckdb.connect()
+
+    marc_country_iso_codes = pd.read_csv(
+        SOURCE_PATH / "resources" / "marc_country_iso_codes.csv"
+    )
+    us_marc_codes = marc_country_iso_codes[marc_country_iso_codes["iso_code"] == "US"][
+        "marc"
+    ].tolist()
+
+    subset_parquet_path = METADATA_PATH / parquet_file_path.name.replace(
+        ".parquet", "_pd_books_us_ia.parquet"
+    )
+
+    # Query the parquet file to get rows with "ia" in the "digitization_agent_code" column
+    select_query = f"SELECT DISTINCT on (ht_bib_key) * FROM '{parquet_file_path}' WHERE digitization_agent_code = 'ia' AND bib_fmt = 'BK' AND (rights = 'pd' OR rights = 'pdus') AND lang = 'eng' AND list_contains({us_marc_codes}, pub_place)"
+    export_query = f"COPY ({select_query}) TO '{subset_parquet_path}'"
+    result = con.execute(export_query)
+
+    # Fetch all the rows and return as a pandas dataframe
+    df = result.fetchdf()
+
+    # Close the connection
+    con.close()
+
+
 download_header_file()
 latest_full_dataset = get_filelist()
+latest_dataset_file_path = METADATA_PATH / latest_full_dataset["filename"]
+parquet_file_path = METADATA_PATH / latest_dataset_file_path.name.replace(
+    ".txt.gz", ".parquet"
+)
 get_latest_dataset(latest_full_dataset)
 convert_to_parquet()
+export_ia_us_pd_books()
