@@ -9,9 +9,9 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-import licensed_pile
+from licensed_pile import logs
 
-SOURCE_PATH = Path(__file__).resolve().parent.parent.parent
+SOURCE_PATH = Path(__file__).resolve().parent.parent
 METADATA_PATH = SOURCE_PATH / "data" / "metadata" / "hathitrust"
 
 
@@ -134,7 +134,7 @@ def convert_to_parquet():
     con.close()
 
 
-def export_ia_us_pd_books():
+def export_ia_pd_us_1929_parquet():
     # Connect to the DuckDB database
     con = duckdb.connect()
 
@@ -146,11 +146,11 @@ def export_ia_us_pd_books():
     ].tolist()
 
     subset_parquet_path = METADATA_PATH / parquet_file_path.name.replace(
-        ".parquet", "_pd_books_us_ia.parquet"
+        ".parquet", "_ia_pd_us_1929.parquet"
     )
 
     # Query the parquet file to get rows with "ia" in the "digitization_agent_code" column
-    select_query = f"SELECT DISTINCT on (ht_bib_key) * FROM '{parquet_file_path}' WHERE digitization_agent_code = 'ia' AND bib_fmt = 'BK' AND (rights = 'pd' OR rights = 'pdus') AND lang = 'eng' AND list_contains({us_marc_codes}, pub_place)"
+    select_query = f"SELECT DISTINCT on (ht_bib_key) * FROM '{parquet_file_path}' WHERE digitization_agent_code = 'ia' AND bib_fmt = 'BK' AND (rights = 'pd' OR rights = 'pdus') AND lang = 'eng' AND content_provider_code != 'loc' AND list_contains({us_marc_codes}, pub_place) AND (rights_date_used >= 1640 AND rights_date_used < 1929)"
     export_query = f"COPY ({select_query}) TO '{subset_parquet_path}'"
     result = con.execute(export_query)
 
@@ -169,4 +169,4 @@ parquet_file_path = METADATA_PATH / latest_dataset_file_path.name.replace(
 )
 get_latest_dataset(latest_full_dataset)
 convert_to_parquet()
-export_ia_us_pd_books()
+export_ia_pd_us_1929_parquet()
