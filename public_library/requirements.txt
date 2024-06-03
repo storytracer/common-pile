@@ -3,4 +3,4 @@ duckdb
 internetarchive
 pyarrow
 fastparquet
-mapply
+click
