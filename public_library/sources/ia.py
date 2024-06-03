@@ -176,7 +176,7 @@ def format_dolma(df_row):
     ocaid = row["ocaid"]
     filepath = DATASET_BOOKS_PATH / f"{ocaid}_djvu.txt"
     if filepath.exists():
-        with open(filepath) as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             text = f.read()
 
         dolma_data = {
