@@ -1,3 +1,4 @@
+import datetime
 import functools
 import json
 import multiprocessing.dummy as mp
@@ -10,6 +11,8 @@ from internetarchive import ArchiveSession
 from tqdm import tqdm
 
 from licensed_pile import logs
+from licensed_pile.licenses import PermissiveLicenses
+from licensed_pile.write import to_dolma
 
 SOURCE_PATH = Path(__file__).resolve().parent.parent
 METADATA_PATH = SOURCE_PATH / "data" / "metadata"
@@ -17,6 +20,7 @@ IA_METADATA_PATH = METADATA_PATH / "ia"
 DATASET_NAME = "hathi_ia_pd_us_1929"
 DATASET_METADATA_PATH = IA_METADATA_PATH / DATASET_NAME
 DATASET_BOOKS_PATH = SOURCE_PATH / "data" / "books" / "ia" / DATASET_NAME
+DATASET_DOLMA_PATH = SOURCE_PATH / "data" / "dolma" / DATASET_NAME / "documents"
 
 MAX_PARALLEL_DOWNLOADS = 10
 
@@ -77,7 +81,6 @@ def download_metadata_for_ark_hashes(ark_hashes):
 def export_jsonl():
     metadata_files = DATASET_METADATA_PATH.glob("*.json")
     metadata_jsonl_path = IA_METADATA_PATH / f"{DATASET_NAME}.jsonl"
-    print(metadata_jsonl_path)
     with open(metadata_jsonl_path, "w") as metadata_jsonl_file:
         for metadata_file_path in metadata_files:
             with open(metadata_file_path, "r") as metadata_file:
@@ -107,10 +110,10 @@ def export_duckdb(ctx):
         f"CREATE TABLE metadata_ia AS SELECT * FROM read_json('{ia_metadata_jsonl_path}', ignore_errors=True, union_by_name=True)"
     )
     con.execute(
-        "CREATE TABLE metadata_ids (ark_hash VARCHAR, htid VARCHAR, ia_ark VARCHAR, ocaid VARCHAR)"
+        "CREATE TABLE metadata_ids (ark_hash VARCHAR, htid VARCHAR, ia_ark_id VARCHAR, ocaid VARCHAR)"
     )
     con.execute(
-        "CREATE TABLE downloads (ocaid VARCHAR, htid VARCHAR, title VARCHAR, author VARCHAR, year INT)"
+        "CREATE TABLE downloads (ocaid VARCHAR, htid VARCHAR, ia_ark_id VARCHAR, title VARCHAR, author VARCHAR, year INT, place VARCHAR, language VARCHAR)"
     )
     con.execute(
         "INSERT INTO metadata_ids (ark_hash) SELECT ark_hash FROM downloaded_ark_hashes_df"
@@ -119,14 +122,17 @@ def export_duckdb(ctx):
         "UPDATE metadata_ids SET htid = (SELECT htid FROM metadata_hathi WHERE ends_with(htid, ark_hash) = TRUE)"
     )
     con.execute(
-        'UPDATE metadata_ids SET ia_ark = (SELECT "identifier-ark" FROM metadata_ia WHERE ends_with("identifier-ark", ark_hash) = TRUE)'
+        'UPDATE metadata_ids SET ia_ark_id = (SELECT "identifier-ark" FROM metadata_ia WHERE ends_with("identifier-ark", ark_hash) = TRUE)'
     )
     con.execute(
-        'UPDATE metadata_ids SET ocaid = (SELECT identifier FROM metadata_ia WHERE "identifier-ark" = ia_ark)'
+        'UPDATE metadata_ids SET ocaid = (SELECT identifier FROM metadata_ia WHERE "identifier-ark" = ia_ark_id)'
     )
     con.execute("INSERT INTO downloads (ocaid) SELECT ocaid FROM downloaded_ocaids_df")
     con.execute(
         "UPDATE downloads SET htid = (SELECT htid FROM metadata_ids WHERE ocaid = downloads.ocaid)"
+    )
+    con.execute(
+        "UPDATE downloads SET ia_ark_id = (SELECT ia_ark_id FROM metadata_ids WHERE ocaid = downloads.ocaid)"
     )
     con.execute(
         "UPDATE downloads SET title = (SELECT title FROM metadata_hathi WHERE htid = downloads.htid)"
@@ -136,6 +142,12 @@ def export_duckdb(ctx):
     )
     con.execute(
         "UPDATE downloads SET year = (SELECT rights_date_used FROM metadata_hathi WHERE htid = downloads.htid)"
+    )
+    con.execute(
+        "UPDATE downloads SET place = (SELECT pub_place FROM metadata_hathi WHERE htid = downloads.htid)"
+    )
+    con.execute(
+        "UPDATE downloads SET language = (SELECT lang FROM metadata_hathi WHERE htid = downloads.htid)"
     )
     con.close()
 
@@ -159,9 +171,55 @@ def export_parquet():
     con.close()
 
 
+def format_dolma(df_row):
+    row = df_row[1]
+    ocaid = row["ocaid"]
+    filepath = DATASET_BOOKS_PATH / f"{ocaid}_djvu.txt"
+    if filepath.exists():
+        with open(filepath) as f:
+            text = f.read()
+
+        dolma_data = {
+            "id": ocaid,
+            "text": text,
+            "source": "public_library",
+            "added": datetime.datetime.utcnow().isoformat(),
+            "metadata": {
+                "title": row["title"],
+                "author": row["author"],
+                "year": row["year"],
+                "place": row["place"],
+                "language": row["language"],
+                "htid": row["htid"],
+                "ia_ark_id": row["ia_ark_id"],
+                "license": str(PermissiveLicenses.PD),
+                "hathi_url": f"https://babel.hathitrust.org/cgi/pt?id={row['htid']}",
+                "ia_url": f"https://archive.org/details/{ocaid}",
+                "text_file_url": f"https://archive.org/download/{ocaid}/{ocaid}_djvu.txt",
+            },
+        }
+
+        return dolma_data
+
+
 @cli.command()
-def to_dolma():
-    pass
+def export_dolma(shard_size=1):
+    db = IA_METADATA_PATH / f"{DATASET_NAME}.duckdb"
+    con = duckdb.connect(str(db))
+    downloads_df = con.execute("SELECT * FROM downloads").fetchdf()
+    results = map(functools.partial(format_dolma), downloads_df.iterrows())
+
+    DATASET_DOLMA_PATH.mkdir(parents=True, exist_ok=True)
+
+    to_dolma(
+        results,
+        DATASET_DOLMA_PATH,
+        "public_library_hathi_ia_pd_us_1929.jsonl.gz",
+        shard_size,
+    )
+    logger.info(
+        f"Exported {len(downloads_df)} text files in dolma format to {DATASET_DOLMA_PATH}"
+    )
 
 
 @cli.command()
