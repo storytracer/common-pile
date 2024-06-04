@@ -2,10 +2,12 @@ import datetime
 import functools
 import json
 import multiprocessing.dummy as mp
+import unicodedata
 from pathlib import Path
 
 import click
 import duckdb
+import msgspec
 import pandas as pd
 from internetarchive import ArchiveSession
 from tqdm import tqdm
@@ -176,8 +178,11 @@ def format_dolma(df_row):
     ocaid = row["ocaid"]
     filepath = DATASET_BOOKS_PATH / f"{ocaid}_djvu.txt"
     if filepath.exists():
-        with open(filepath, encoding="utf-8", errors="replace") as f:
-            text = f.read()
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            raw_text = f.read()
+            json_encoded_text = msgspec.json.encode(raw_text)
+            json_decoded_text = msgspec.json.decode(json_encoded_text)
+            text = json_decoded_text
 
         dolma_data = {
             "id": ocaid,
