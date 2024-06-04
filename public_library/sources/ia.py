@@ -178,11 +178,10 @@ def format_dolma(df_row):
     ocaid = row["ocaid"]
     filepath = DATASET_BOOKS_PATH / f"{ocaid}_djvu.txt"
     if filepath.exists():
-        with open(filepath, encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="strict") as f:
             raw_text = f.read()
-            json_encoded_text = msgspec.json.encode(raw_text)
-            json_decoded_text = msgspec.json.decode(json_encoded_text)
-            text = json_decoded_text
+            normalized_text = unicodedata.normalize("NFKD", raw_text)
+            text = normalized_text
 
         dolma_data = {
             "id": ocaid,
