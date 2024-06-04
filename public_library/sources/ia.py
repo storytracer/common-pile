@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 import duckdb
-import msgspec
+import ftfy
 import pandas as pd
 from internetarchive import ArchiveSession
 from tqdm import tqdm
@@ -178,10 +178,10 @@ def format_dolma(df_row):
     ocaid = row["ocaid"]
     filepath = DATASET_BOOKS_PATH / f"{ocaid}_djvu.txt"
     if filepath.exists():
-        with open(filepath, encoding="utf-8", errors="strict") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             raw_text = f.read()
-            normalized_text = unicodedata.normalize("NFKD", raw_text)
-            text = normalized_text
+            fixed_text = ftfy.fix_text(raw_text)
+            text = fixed_text
 
         dolma_data = {
             "id": ocaid,
