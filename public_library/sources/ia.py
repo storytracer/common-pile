@@ -180,7 +180,7 @@ def format_dolma(df_row):
     if filepath.exists():
         with open(filepath, encoding="utf-8", errors="ignore") as f:
             raw_text = f.read()
-            fixed_text = ftfy.fix_text(raw_text)
+            fixed_text = ftfy.fixes.remove_control_chars(raw_text)
             text = fixed_text
 
         dolma_data = {
