@@ -4,4 +4,3 @@ internetarchive
 pyarrow
 fastparquet
 click
-ftfy

@@ -2,12 +2,10 @@ import datetime
 import functools
 import json
 import multiprocessing.dummy as mp
-import unicodedata
 from pathlib import Path
 
 import click
 import duckdb
-import ftfy
 import pandas as pd
 from internetarchive import ArchiveSession
 from tqdm import tqdm
@@ -179,10 +177,7 @@ def format_dolma(df_row):
     filepath = DATASET_BOOKS_PATH / f"{ocaid}_djvu.txt"
     if filepath.exists():
         with open(filepath, encoding="utf-8", errors="ignore") as f:
-            raw_text = f.read()
-            fixed_text, explanation = ftfy.fix_and_explain(raw_text)
-            logger.debug(f"Fixed text for {ocaid}: {explanation}")
-            text = fixed_text
+            text = f.read()
 
         dolma_data = {
             "id": ocaid,
@@ -219,7 +214,7 @@ def export_dolma(shard_size=1):
     to_dolma(
         results,
         DATASET_DOLMA_PATH,
-        "public_library_hathi_ia_pd_us_1929.jsonl.gz",
+        "public_library_1929.jsonl.gz",
         shard_size,
     )
     logger.info(
