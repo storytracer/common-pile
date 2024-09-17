@@ -24,20 +24,46 @@ def parse_args():
         "--collections",
         nargs="+",
         default=[
-            "BILLS",
-            "BUDGET",
-            "CDIR",
-            "CFR",
-            "CPD",
-            "CRI",
-            "CZIC",
-            "GAOREPORTS",
-            "GPO",
-            "HJOURNAL",
-            "HOB",
-            "PAI",
-            "PLAW",
-            "USCODE",
+            "BILLS", # Congressional Bills
+            # "BILLSTATUS", # Congressional Bill Status [No relevant full text content]
+            # "BILLSUM", Congressional Bill Summaries [No relevant full text content]
+            "BUDGET", # United States Budget
+            "CCAL", # Congressional Calendars
+            "CDIR", # Congressional Directory
+            "CDOC", # Congressional Documents
+            "CFR", # Code of Federal Regulations
+            "CHRG", # Congressional Hearings
+            # "CMR", # Congressionally Mandated Reports [No relevant full text content]
+            # "COMPS", # Statutes Compilations [No relevant full text content]
+            "CPD", # Compilation of Presidential Documents
+            "CPRT", # Congressional Committee Prints 
+            "CREC", # Congressional Record
+            # "CRECB", # Congressional Record (Bound Edition) [Mostly duplicate of CREC]
+            # "CRI", # Congressional Record Index [No relevant full text content]
+            "CRPT", # Congressional Reports
+            # "CZIC", # Coastal Zone Information Center [No relevant full text content]
+            # "ECFR", # Electronic Code of Federal Regulations [No relevant full text content]
+            # "ECONI", # Economic Indicators [No relevant full text content]
+            # "ERIC", # Education Reports from ERIC [No relevant full text content]
+            # "ERP", # Economic Report of the President [No relevant full text content]
+            "FR", # Federal Register
+            "GAOREPORTS", # Government Accountability Office Reports and Comptroller General Decisions
+            # "GOVMAN", # United States Government Manual [No relevant full text content]
+            # "GOVPUB", # Bulk Submission [No relevant full text content]
+            "GPO", # Additional Government Publications
+            # "HJOURNAL", # Journal of the House of Representatives [No relevant full text content]
+            # "HMAN", # House Rules and Manual [No relevant full text content]
+            # "HOB", # History of Bills [No relevant full text content]
+            # "LSA", # List of CFR Sections Affected [No relevant full text content]
+            # "PAI", # Privacy Act Issuances [No relevant full text content]
+            "PLAW", # Public and Private Laws
+            # "PPP", # Public Papers of the Presidents of the United States [No relevant full text content]
+            # "SERIALSET", # Congressional Serial Set [No relevant full text content]
+            # "SJOURNAL", # Journal of the Senate [No relevant full text content]
+            # "SMAN", # Senate Manual [No relevant full text content]
+            "STATUTE", # Statutes at Large
+            "USCODE", # United States Code
+            # "USCOURTS", # United States Courts Opinions [Not included to avoid duplication with CourtListener]
         ],
     )
     args = parser.parse_args()

@@ -1,0 +1,4 @@
+jsonlines
+trafilatura
+beautifulsoup4
+tqdm
