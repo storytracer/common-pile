@@ -2,6 +2,9 @@ from time import sleep
 from pyrate_limiter import Limiter, RequestRate, Duration, BucketFullException
 from requests_cache import CachedSession, NEVER_EXPIRE
 from licensed_pile import logs
+import dotenv
+
+dotenv.load_dotenv()
 
 # Cached session for resumability
 session = CachedSession('data/cache', expire_after=NEVER_EXPIRE, backend='filesystem')  # Cache never expires, delete folder to clear
