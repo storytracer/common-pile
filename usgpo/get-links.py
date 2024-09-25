@@ -167,58 +167,37 @@ def extract_name(root, name_role):
                 return name
     return None
 
-def extract_title(root, host_title=None):
+def extract_title(root):
     """Construct the full title from MODS elements."""
-    title = None
+    search_title = mods_findtext(root, './mods:extension/mods:searchTitle')
+    if search_title is not None:
+        stripped_lines = "".join([line.strip() for line in search_title.splitlines()]).rstrip(";")
+        parts = stripped_lines.split(";")
+        stripped_parts = [part.strip() for part in parts]
+        cleaned_search_title = " – ".join(stripped_parts)
+        
+        return cleaned_search_title
     
-    short_title_elem = mods_find(root, './/mods:extension/mods:shortTitle')
-    if short_title_elem is not None and short_title_elem.text:
-        title = short_title_elem.text
-    else:
-        title_info = mods_find(root, 'mods:titleInfo')
-        if title_info is not None:
-            titleInfoTitle = mods_findtext(title_info, 'mods:title')
-            part_number = mods_findtext(title_info, 'mods:partNumber')
+    title_info = mods_find(root, 'mods:titleInfo')
+    
+    title = None
+    if title_info is not None:
+        title_info_title = mods_findtext(title_info, 'mods:title')
+        part_number = mods_findtext(title_info, 'mods:partNumber')
 
-            if titleInfoTitle is None and part_number:
-                title = part_number
-            elif titleInfoTitle is not None and part_number is None:
-                title = titleInfoTitle
-            elif titleInfoTitle is not None and part_number is not None:
-                if titleInfoTitle == part_number:
-                    title = titleInfoTitle
-                else:
-                    title = f"{titleInfoTitle}: {part_number}"
-        else:
-            search_title_elem = mods_find(root, './/mods:extension/mods:searchTitle')
-            title = search_title_elem.text if search_title_elem is not None and title is None else None
+        if title_info_title is None and part_number:
+            title = part_number
+        elif title_info_title is not None and part_number is None:
+            title = title_info_title
+        elif title_info_title is not None and part_number is not None:
+            if title_info_title == part_number:
+                title = title_info_title
+            else:
+                title = f"{title_info_title}: {part_number}"
+    
+    return title
 
-    if not host_title:
-        citation = None
-        identifiers = mods_findall(root, 'mods:identifier')
-        for identifier in identifiers:
-            if identifier.get('type') == 'preferred citation':
-                citation = identifier.text
-                break
-        if not citation:
-            related_items = mods_findall(root, 'mods:relatedItem')
-            for item in related_items:
-                if item.get('type') == 'host':
-                    host_identifiers = mods_findall(item, 'mods:identifier')
-                    for id_elem in host_identifiers:
-                        if id_elem.get('type') == 'preferred citation':
-                            citation = id_elem.text
-                            break
-        host_title = citation
-
-    if title and host_title:
-        full_title = f"{host_title} – {title}"
-    else:
-        full_title = title
-
-    return full_title
-
-def extract_granules(root, package_id, host_title=None):
+def extract_granules(root, package_id):
     """Extract granule information from related items."""
     granules = []
     related_items = mods_findall(root, 'mods:relatedItem')
@@ -250,7 +229,7 @@ def extract_granules(root, package_id, host_title=None):
                 "granule_id": granule_id,
                 "sequence_no": sequence_no,
                 "granule_class": granule_class,
-                "title": extract_title(item, host_title),
+                "title": extract_title(item),
                 "links": links,
             }
             granules.append(granule)
@@ -307,12 +286,12 @@ def get_package_metadata(package):
         record = {
             "collection": collection_code,
             "package_id": access_id or package_id,
-            "title": package_title,
+            "title": extract_title(mods_root) or package_title,
             "date": mods_findtext(origin_info, 'mods:dateIssued') if origin_info is not None else None,
             "author": extract_name(mods_root, "author"),
             "publisher": extract_name(mods_root, "publisher"),
             "links": links,
-            "granules": extract_granules(mods_root, package_id, package_title),
+            "granules": extract_granules(mods_root, package_id),
         }
         record["html_links"] = extract_html_links(record)
         return record
