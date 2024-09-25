@@ -169,6 +169,8 @@ def extract_name(root, name_role):
 
 def extract_title(root, host_title=None):
     """Construct the full title from MODS elements."""
+    title = None
+    
     short_title_elem = mods_find(root, './/mods:extension/mods:shortTitle')
     if short_title_elem is not None and short_title_elem.text:
         title = short_title_elem.text
@@ -209,9 +211,10 @@ def extract_title(root, host_title=None):
                             break
         host_title = citation
 
-    full_title = title
-    if host_title and title:
+    if title and host_title:
         full_title = f"{host_title} – {title}"
+    else:
+        full_title = title
 
     return full_title
 
