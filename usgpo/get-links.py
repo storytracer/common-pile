@@ -285,7 +285,7 @@ def get_package_metadata(package):
     response = session.get(mods_url)
     if response.status_code == 200:
         mods_root = etree.fromstring(response.content)
-        package_title = extract_title(mods_root)
+        package_title = package["title"]
 
         extension_elements = mods_findall(mods_root, './mods:extension')
 
