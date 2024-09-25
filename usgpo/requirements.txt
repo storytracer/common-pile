@@ -4,3 +4,4 @@ beautifulsoup4
 tqdm
 redislite
 pyrate-limiter
+requests-ratelimiter
