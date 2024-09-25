@@ -3,3 +3,4 @@ trafilatura
 beautifulsoup4
 tqdm
 redislite
+pyrate-limiter
