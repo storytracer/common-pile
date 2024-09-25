@@ -3,11 +3,15 @@ from pyrate_limiter import Limiter, RequestRate, Duration, BucketFullException
 from requests_cache import CachedSession, NEVER_EXPIRE
 from licensed_pile import logs
 import dotenv
+from pathlib import Path
 
 dotenv.load_dotenv()
 
+file_cache_directory = Path('data/cache/files')
+file_cache_directory.mkdir(parents=True, exist_ok=True)
+
 # Cached session for resumability
-session = CachedSession('data/cache', expire_after=NEVER_EXPIRE, backend='filesystem')  # Cache never expires, delete folder to clear
+session = CachedSession(str(file_cache_directory), expire_after=NEVER_EXPIRE, backend='filesystem')  # Cache never expires, delete folder to clear
 
 # Define rate limits: 1000 requests per hour and 1 request every 3 seconds
 rate_limit_seconds = RequestRate(1, Duration.SECOND * 3)

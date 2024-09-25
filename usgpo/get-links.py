@@ -15,10 +15,10 @@ from requests_cache import CachedSession, RedisCache, NEVER_EXPIRE
 
 dotenv.load_dotenv()
 
-redis_directory = Path("data/redis")
+redis_directory = Path("data/cache/redis")
 redis_directory.mkdir(parents=True, exist_ok=True)
 
-backend = RedisCache(connection=Redis("data/redis/session.db"))
+backend = RedisCache(connection=Redis(f"{redis_directory}/session.db"))
 session = CachedSession(expire_after=NEVER_EXPIRE, backend=backend)
 
 MODS_NS = {'mods': 'http://www.loc.gov/mods/v3'}
