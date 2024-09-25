@@ -6,16 +6,22 @@ import jsonlines
 from tqdm.auto import tqdm
 from utils import api_query
 from licensed_pile import logs
-import xmltodict
+from lxml import etree
 import dotenv
 import os
+from pathlib import Path
 from redislite import Redis
 from requests_cache import CachedSession, RedisCache, NEVER_EXPIRE
 
 dotenv.load_dotenv()
 
+redis_directory = Path("data/redis")
+redis_directory.mkdir(parents=True, exist_ok=True)
+
 backend = RedisCache(connection=Redis("data/redis/session.db"))
 session = CachedSession(expire_after=NEVER_EXPIRE, backend=backend)
+
+MODS_NS = {'mods': 'http://www.loc.gov/mods/v3'}
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -26,7 +32,7 @@ def parse_args():
         help="Start date in ISO8601 format (yyyy-MM-dd'T'HH:mm:ss'Z')",
     )
     parser.add_argument("--output-dir", required=True, help="Path to output directory")
-    parser.add_argument("--workers", type=int, default=50, help="Number of threads")
+    parser.add_argument("--workers", type=int, default=20, help="Number of threads")
     parser.add_argument("--pages", type=int, help="Number of pages to download")
     parser.add_argument(
         "--collections",
@@ -100,17 +106,18 @@ def get_packages(api_key, collections, start_date, page_limit):
 
         if response.status_code == 200:
             output = response.json()
+            page_counter += 1
 
             for record in output["packages"]:
                 packages.append(record)
                 pbar.update(1)
-                page_counter += 1
 
             if page_limit and page_counter >= page_limit:
                 break
             else:
                 url = output["nextPage"]
                 offset_mark = None
+                
         else:
             logger.error(
                 f"get_packages received status code {response.status_code} for query {url}"
@@ -118,226 +125,193 @@ def get_packages(api_key, collections, start_date, page_limit):
             break
     return packages
 
-def merge_tag(element):
-    if element is None:
-        return None
-    
-    data = {}
-    if isinstance(element, list):
-        for element in element:
-            data.update(element)
-    else:
-        data = element
-    return data
+def mods_find(element, path):
+    """Helper function to find a single element with MODS namespace."""
+    return element.find(path, namespaces=MODS_NS)
 
-def read_links(element):
-    if element is None:
-        return None
-    
-    data = {}
-    if isinstance(element, list):
-        for element in element:
-            display_label = element.get("@displayLabel")
-            url = read_text(element)
-            data[display_label] = url
-    return data
+def mods_findall(element, path):
+    """Helper function to find all elements with MODS namespace."""
+    return element.findall(path, namespaces=MODS_NS)
 
-def read_list(element):
-    if element is None:
-        return []
-    
-    if isinstance(element, list):
-        return element
-    
-    return [element]
+def mods_findtext(element, path):
+    """Helper function to find text of an element with MODS namespace."""
+    return element.findtext(path, namespaces=MODS_NS)
 
-def read_name(element, name_role):
-    names = []
-    if isinstance(element, list):
-        names = element
-    elif element is not None:
-        names = [element]
-        
-    for name in names:
-        roles = read_list(name.get("role"))
-        for role in roles:
-            roleTerms = read_list(role.get("roleTerm"))
-            for roleTerm in roleTerms:
-                if roleTerm.get("@type") == "text":
-                    role = roleTerm.get("#text")
-                    if role == name_role:
-                        nameParts = read_list(name.get("namePart"))
-                        authorName = " ".join(nameParts)
-                        
-                        return authorName
-                    
-def read_title(element, host_title=None):
-    full_title = None
-    title = None
-    
-    if host_title is None:
-        citation = None
-        citation_key = "preferred citation"
-        
-        identifiers = read_list(element.get("identifier"))
-        if identifiers:
-            for id in identifiers:
-                if id.get("@type") == citation_key:
-                    citation = id.get("#text")
-                    break
-                
-        if citation is None:
-            related_items = read_list(element.get("relatedItem"))
-            host_items = [item for item in related_items if item.get("@type") == "host"]
-            if len(host_items) > 0:
-                for item in host_items:
-                    host_identifiers = read_list(item.get("identifier"))
-                    for id in host_identifiers:
-                        if id.get("@type") == citation_key:
-                            citation = id.get("#text")
-                            break
-        
-        if citation:
-            host_title = citation
-        
-    extension = merge_tag(element.get("extension"))
-    if extension:
-        shortTitle = read_text(extension.get("shortTitle"))
-        if shortTitle is not None:
-            title = shortTitle
-        else:
-            titleInfo = element.get("titleInfo")
-            if titleInfo:
-                titleInfoTitle = titleInfo.get("title")
-                part_number = titleInfo.get("partNumber")
-                
-                if titleInfoTitle is None and part_number:
-                    title = part_number
-                elif titleInfoTitle is not None and part_number is None:
-                    title = titleInfoTitle
-                elif titleInfoTitle is not None and part_number is not None:
-                    if titleInfoTitle == part_number:
-                        title = titleInfoTitle
-                    else:
-                        title = f"{part_number}: {titleInfoTitle}"
-            else:
-                searchTitle = read_text(extension.get("searchTitle"))
-                if searchTitle is not None:
-                    full_title = searchTitle
-    
-    if full_title is None:
-        if host_title and title:
-            full_title = f"{host_title} – {title}"
-        elif title:
-            full_title = title
-    
-    return full_title
-
-def read_text(element):
-    if element is None:
-        return None
-    
-    if isinstance(element, str):
-        return element
-    
-    tags = []
-    if isinstance(element, dict):
-        tags = [element]
-    
-    if isinstance(element, list):
-        tags = element
-    
-    if len(tags) > 0:
-        textParts = []
-        for tag in tags:
-            if isinstance(tag, str):
-                textParts.append(tag)
-            elif isinstance(tag, dict):      
-                tag_text = tag.get("#text")
-                if tag_text is not None:
-                    textParts.append(tag_text)
-        text = " ".join(textParts)
-        return text
-    
+def get_text(element):
+    """Helper function to get text from an element."""
+    if element is not None:
+        return element.text
     return None
 
-def read_granules(elements, package_id, host_title=None):
-    if len(elements) == 0:
+def extract_links(root):
+    """Extract links from the location element."""
+    if root is None:
         return None
-    
+
+    links = {}
+    for url_elem in mods_findall(root, 'mods:url'):
+        display_label = url_elem.get('displayLabel')
+        url = url_elem.text
+        if display_label and url:
+            links[display_label] = url
+    return links
+
+def extract_name(root, name_role):
+    """Extract the name of the author or publisher based on role."""
+    for name_elem in mods_findall(root, 'mods:name'):
+        role_terms = mods_findall(name_elem, 'mods:role/mods:roleTerm')
+        for role_term in role_terms:
+            if role_term.get('type') == 'text' and role_term.text == name_role:
+                name_parts = mods_findall(name_elem, 'mods:namePart')
+                name = ' '.join([np.text for np in name_parts if np.text])
+                return name
+    return None
+
+def extract_title(root, host_title=None):
+    """Construct the full title from MODS elements."""
+    short_title_elem = mods_find(root, './/mods:extension/mods:shortTitle')
+    if short_title_elem is not None and short_title_elem.text:
+        title = short_title_elem.text
+    else:
+        title_info = mods_find(root, 'mods:titleInfo')
+        if title_info is not None:
+            titleInfoTitle = mods_findtext(title_info, 'mods:title')
+            part_number = mods_findtext(title_info, 'mods:partNumber')
+
+            if titleInfoTitle is None and part_number:
+                title = part_number
+            elif titleInfoTitle is not None and part_number is None:
+                title = titleInfoTitle
+            elif titleInfoTitle is not None and part_number is not None:
+                if titleInfoTitle == part_number:
+                    title = titleInfoTitle
+                else:
+                    title = f"{titleInfoTitle}: {part_number}"
+        else:
+            search_title_elem = mods_find(root, './/mods:extension/mods:searchTitle')
+            title = search_title_elem.text if search_title_elem is not None and title is None else None
+
+    if not host_title:
+        citation = None
+        identifiers = mods_findall(root, 'mods:identifier')
+        for identifier in identifiers:
+            if identifier.get('type') == 'preferred citation':
+                citation = identifier.text
+                break
+        if not citation:
+            related_items = mods_findall(root, 'mods:relatedItem')
+            for item in related_items:
+                if item.get('type') == 'host':
+                    host_identifiers = mods_findall(item, 'mods:identifier')
+                    for id_elem in host_identifiers:
+                        if id_elem.get('type') == 'preferred citation':
+                            citation = id_elem.text
+                            break
+        host_title = citation
+
+    full_title = title
+    if host_title and title:
+        full_title = f"{host_title} – {title}"
+
+    return full_title
+
+def extract_granules(root, package_id, host_title=None):
+    """Extract granule information from related items."""
     granules = []
-    for element in elements:
-        type = element.get("@type")
-        if type and type == "constituent":
-            location = element.get("location").get("url")
-            extension = merge_tag(element.get("extension"))
-            sequence_no = int(extension.get("sequenceNumber")) if extension.get("sequenceNumber") else 0
+    related_items = mods_findall(root, 'mods:relatedItem')
+    for item in related_items:
+        if item.get('type') == 'constituent':
+            location_elem = mods_find(item, 'mods:location')
+            links = extract_links(location_elem)
+
+            extension_elements = mods_findall(item, 'mods:extension')
+
+            granule_id = None
+            sequence_no = None
+            granule_class = None
+
+            for extension in extension_elements:
+                if granule_id is None:
+                    access_id_elem = mods_find(extension, 'mods:accessId')
+                    granule_id = get_text(access_id_elem)
+                if granule_class is None:
+                    granule_class_elem = mods_find(extension, 'mods:granuleClass')
+                    granule_class = get_text(granule_class_elem)
+                if sequence_no is None:
+                    sequence_no_elem = mods_find(extension, 'mods:sequenceNumber')
+                    sequence_no_text = get_text(sequence_no_elem)
+                    sequence_no = int(sequence_no_text) if sequence_no_text is not None else None
+
             granule = {
                 "package_id": package_id,
-                "granule_id": extension.get("accessId"),
+                "granule_id": granule_id,
                 "sequence_no": sequence_no,
-                "granule_class": extension.get("granuleClass"),
-                "title": read_title(element, host_title),
-                "links": read_links(location),
+                "granule_class": granule_class,
+                "title": extract_title(item, host_title),
+                "links": links,
             }
             granules.append(granule)
-    granules = sorted(granules, key=lambda x: (x["sequence_no"]))
-            
-    if len(granules) == 0:
+
+    if not granules:
         return None
-    
+
+    granules.sort(key=lambda x: x["sequence_no"] or 0)
     return granules
 
-def read_html_links(record):
+def extract_html_links(record):
+    """Collect HTML links from the record and its granules."""
     html_links = []
     record_links = record.get("links")
-    if record_links is not None:
-        key = "HTML rendition"
-        package_html = record_links.get(key)
-        if package_html is not None:
-            html_links.append(package_html)
-        else:
-            granules = record.get("granules")
-            if granules is not None:
-                for granule in record["granules"]:
-                    granuleLinks = granule.get("links")
-                    if granuleLinks is not None:
-                        granuleHTML = granuleLinks.get(key)
-                        if granuleHTML is not None:
-                            html_links.append(granuleHTML)
-                        
-    if len(html_links) == 0:
-        return None
-                        
-    return html_links
-    
+    if record_links:
+        html_link = record_links.get("HTML rendition")
+        if html_link:
+            html_links.append(html_link)
+    granules = record.get("granules")
+    if granules:
+        for granule in granules:
+            granule_links = granule.get("links")
+            if granule_links:
+                html_link = granule_links.get("HTML rendition")
+                if html_link:
+                    html_links.append(html_link)
+    return html_links if html_links else None
+
 def get_package_metadata(package):
     package_id = package["packageId"]
     mods_url = f"https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml"
     response = session.get(mods_url)
     if response.status_code == 200:
-        record = {}
-        metadata = xmltodict.parse(response.text)
-        mods = metadata.get("mods")
-        extension = merge_tag(mods.get("extension"))
-        originInfo = merge_tag(mods.get("originInfo"))
-        location = merge_tag(mods.get("location"))
-        links = read_links(location.get("url")) if location and location.get("url") else None
-        relatedItems = read_list(mods.get("relatedItem"))
-        name = mods.get("name")
-        package_title = read_title(mods)
+        mods_root = etree.fromstring(response.content)
+        package_title = extract_title(mods_root)
+
+        extension_elements = mods_findall(mods_root, './mods:extension')
+
+        collection_code = None
+        access_id = None
+
+        for extension in extension_elements:
+            if collection_code is None:
+                doc_class_elem = mods_find(extension, 'mods:collectionCode')
+                collection_code = get_text(doc_class_elem)
+            if access_id is None:
+                access_id_elem = mods_find(extension, 'mods:accessId')
+                access_id = get_text(access_id_elem)
+
+        origin_info = mods_find(mods_root, 'mods:originInfo')
+        location_elem = mods_find(mods_root, 'mods:location')
+        links = extract_links(location_elem)
+
         record = {
-            "collection": extension.get("docClass"),
-            "package_id": extension.get("accessId"),
+            "collection": collection_code,
+            "package_id": access_id or package_id,
             "title": package_title,
-            "date": read_text(originInfo.get("dateIssued")),
-            "author": read_name(name, "author"),
-            "publisher": read_name(name, "publisher"),
+            "date": mods_findtext(origin_info, 'mods:dateIssued') if origin_info is not None else None,
+            "author": extract_name(mods_root, "author"),
+            "publisher": extract_name(mods_root, "publisher"),
             "links": links,
-            "granules": read_granules(relatedItems, package_id, package_title),
+            "granules": extract_granules(mods_root, package_id, package_title),
         }
-        record["html_links"] = read_html_links(record)
-        # print(record)
+        record["html_links"] = extract_html_links(record)
         return record
 
 def main(args):
@@ -364,11 +338,11 @@ def main(args):
                 package = metadata_futures_to_package[metadata_future]
                 try:
                     record = metadata_future.result()
+                    if record:
+                        writer.write(record)
                 except Exception as e:
                     logger.error(f"Package {package} raised exception {e}")
                     continue
-                writer.write(record)
-
 
 if __name__ == "__main__":
     args = parse_args()
