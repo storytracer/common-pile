@@ -175,32 +175,17 @@ def extract_title(root):
         parts = stripped_lines.split(";")
         stripped_parts = [part.strip() for part in parts]
         cleaned_search_title = " – ".join(stripped_parts)
+        title = cleaned_search_title
         
-        return cleaned_search_title
+        return title
     
-    title_info = mods_find(root, 'mods:titleInfo')
-    
-    title = None
+    title_info = mods_find(root, './mods:titleInfo')
     if title_info is not None:
-        title_info_title = mods_findtext(title_info, 'mods:title')
-        part_number_elements = mods_findall(title_info, 'mods:partNumber')
-        part_number = None
+        title = " ".join([line.strip() for line in ''.join(title_info.itertext()).strip().splitlines()])
         
-        if len(part_number_elements) > 0:
-            part_numbers = [get_text(part_number) for part_number in part_number_elements]
-            part_number = " ".join(part_numbers)
-
-        if title_info_title is None and part_number is not None:
-            title = part_number
-        elif title_info_title is not None and part_number is None:
-            title = title_info_title
-        elif title_info_title is not None and part_number is not None:
-            if title_info_title == part_number:
-                title = title_info_title
-            else:
-                title = f"{part_number}: {title_info_title}"
+        return title
     
-    return title
+    return None
 
 def extract_granules(root, package_id):
     """Extract granule information from related items."""
