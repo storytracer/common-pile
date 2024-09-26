@@ -193,7 +193,7 @@ def extract_title(root):
             if title_info_title == part_number:
                 title = title_info_title
             else:
-                title = f"{title_info_title}: {part_number}"
+                title = f"{part_number}: {title_info_title}"
     
     return title
 
