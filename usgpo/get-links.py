@@ -281,7 +281,7 @@ def get_package_metadata(package):
         record = {
             "collection": collection_code,
             "package_id": access_id or package_id,
-            "title": extract_title(mods_root) or package_title,
+            "title": package_title or extract_title(mods_root),
             "date": mods_findtext(origin_info, 'mods:dateIssued') if origin_info is not None else None,
             "author": extract_name(mods_root, "author"),
             "publisher": extract_name(mods_root, "publisher"),
