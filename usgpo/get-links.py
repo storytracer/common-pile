@@ -183,7 +183,9 @@ def extract_title(root):
     title = None
     if title_info is not None:
         title_info_title = mods_findtext(title_info, 'mods:title')
-        part_number = mods_findtext(title_info, 'mods:partNumber')
+        part_number_elements = mods_findall(title_info, 'mods:partNumber')
+        part_numbers = [get_text(part_number) for part_number in part_number_elements]
+        part_number = " ".join(part_numbers)
 
         if title_info_title is None and part_number:
             title = part_number
