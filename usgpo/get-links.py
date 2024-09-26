@@ -241,22 +241,27 @@ def extract_granules(root, package_id):
     return granules
 
 def extract_html_links(record):
-    """Collect HTML links from the record and its granules."""
     html_links = []
     record_links = record.get("links")
-    if record_links:
-        html_link = record_links.get("HTML rendition")
-        if html_link:
-            html_links.append(html_link)
-    granules = record.get("granules")
-    if granules:
-        for granule in granules:
-            granule_links = granule.get("links")
-            if granule_links:
-                html_link = granule_links.get("HTML rendition")
-                if html_link:
-                    html_links.append(html_link)
-    return html_links if html_links else None
+    if record_links is not None:
+        key = "HTML rendition"
+        package_html = record_links.get(key)
+        if package_html is not None:
+            html_links.append(package_html)
+        else:
+            granules = record.get("granules")
+            if granules is not None:
+                for granule in record["granules"]:
+                    granuleLinks = granule.get("links")
+                    if granuleLinks is not None:
+                        granuleHTML = granuleLinks.get(key)
+                        if granuleHTML is not None:
+                            html_links.append(granuleHTML)
+                        
+    if len(html_links) == 0:
+        return None
+                        
+    return html_links
 
 def get_package_metadata(package):
     package_id = package["packageId"]
