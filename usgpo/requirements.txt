@@ -6,3 +6,4 @@ redislite
 pyrate-limiter
 requests-ratelimiter
 requests-cache
+furl
