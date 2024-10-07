@@ -123,10 +123,11 @@ def construct_record(mirror_url, file):
                         
                         html = download_file(link, mirror_url)
                         text = parse_html(html)
+                        id = f"{file['package_id']}/{granule['granule_id']}"
                 
                         record = {
                             "collection": file["collection"],
-                            "id": granule["granule_id"],
+                            "id": id,
                             "title": file["title"],
                             "date": file["date"],
                             "author": file["author"],
